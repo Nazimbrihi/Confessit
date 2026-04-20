@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ConfessIt — Anonymous Confessions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0d0f18;
+    --surface: #13162a;
+    --surface2: #1a1e35;
+    --border: rgba(255,255,255,0.07);
+    --amber: #f5a623;
+    --amber-dim: rgba(245,166,35,0.15);
+    --violet: #8b6fff;
+    --violet-dim: rgba(139,111,255,0.15);
+    --text: #e8e9f0;
+    --text-muted: #7a7d96;
+    --text-dim: #4a4d66;
+    --card-shadow: 0 4px 24px rgba(0,0,0,0.45);
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.55;
+  }
+
+  /* Ambient glow */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 400px;
+    background: radial-gradient(ellipse, rgba(139,111,255,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* === NAV === */
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(13,15,24,0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+  }
+
+  .nav-logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.4rem;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, var(--amber) 0%, var(--violet) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    cursor: pointer;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 4px;
+  }
+
+  .nav-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .nav-btn:hover { color: var(--text); background: var(--surface2); }
+  .nav-btn.active { color: var(--amber); background: var(--amber-dim); }
+
+  .nav-alias {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    padding: 6px 12px;
+    background: var(--surface2);
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    font-weight: 500;
+    letter-spacing: 0.2px;
+  }
+
+  /* === LAYOUT === */
+  .page { display: none; animation: fadeIn 0.3s ease; }
+  .page.active { display: block; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 32px 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .page-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1.6rem;
+    margin-bottom: 24px;
+    letter-spacing: -0.5px;
+  }
+
+  /* === SEARCH & FILTER === */
+  .feed-controls { margin-bottom: 28px; display: flex; flex-direction: column; gap: 14px; }
+
+  .search-wrap { position: relative; }
+  .search-wrap input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    padding: 12px 16px 12px 44px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .search-wrap input::placeholder { color: var(--text-dim); }
+  .search-wrap input:focus {
+    border-color: rgba(139,111,255,0.4);
+    box-shadow: 0 0 0 3px rgba(139,111,255,0.08);
+  }
+  .search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-dim);
+    pointer-events: none;
+  }
+
+  .pill-bar {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .pill-bar::-webkit-scrollbar { display: none; }
+
+  .pill {
+    flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.18s;
+    white-space: nowrap;
+  }
+  .pill:hover { color: var(--text); border-color: rgba(255,255,255,0.15); }
+  .pill.active {
+    background: var(--amber-dim);
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+  .pill-bar.religion .pill.active {
+    background: var(--violet-dim);
+    border-color: var(--violet);
+    color: var(--violet);
+  }
+
+  .filter-label {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+
+  /* === CONFESSION CARD === */
+  .feed { display: flex; flex-direction: column; gap: 16px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    box-shadow: var(--card-shadow);
+    transition: border-color 0.2s, transform 0.2s;
+    animation: cardIn 0.35s ease backwards;
+  }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .card:hover { border-color: rgba(255,255,255,0.12); transform: translateY(-2px); }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+
+  .alias-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+
+  .alias-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+
+  .own-badge {
+    font-size: 0.68rem;
+    background: var(--amber-dim);
+    color: var(--amber);
+    border: 1px solid rgba(245,166,35,0.3);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+
+  .add-friend-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.18s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .add-friend-btn:hover { border-color: var(--violet); color: var(--violet); background: var(--violet-dim); }
+  .add-friend-btn.is-friend { border-color: var(--violet); color: var(--violet); background: var(--violet-dim); cursor: default; }
+  .add-friend-btn.own-user { display: none; }
+
+  .card-timestamp {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+  }
+
+  .card-tags { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+
+  .genre-tag {
+    font-size: 0.73rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: var(--surface2);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .religion-pill {
+    font-size: 0.73rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.3px;
+  }
+
+  .rel-Muslim    { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+  .rel-Christian { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
+  .rel-Jewish    { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); }
+  .rel-Hindu     { background: rgba(249,115,22,0.15); color: #fb923c; border: 1px solid rgba(249,115,22,0.3); }
+  .rel-Buddhist  { background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.3); }
+  .rel-Atheist   { background: rgba(107,114,128,0.15); color: #9ca3af; border: 1px solid rgba(107,114,128,0.3); }
+  .rel-Other     { background: rgba(236,72,153,0.15); color: #f472b6; border: 1px solid rgba(236,72,153,0.3); }
+
+  .card-text {
+    font-size: 0.97rem;
+    line-height: 1.7;
+    color: #c8cadb;
+    margin-bottom: 16px;
+  }
+
+  .card-text .trunc { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+  .card-text.expanded .trunc { display: block; }
+
+  .read-more-btn {
+    background: none;
+    border: none;
+    color: var(--violet);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0;
+    font-weight: 500;
+    margin-top: 4px;
+    display: block;
+  }
+
+  .card-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  .action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.83rem;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.18s;
+  }
+  .action-btn:hover { border-color: rgba(255,255,255,0.15); color: var(--text); }
+
+  .like-btn.liked { color: #f87171; border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.08); }
+  .comment-btn.active { color: var(--violet); border-color: rgba(139,111,255,0.4); background: var(--violet-dim); }
+
+  /* === COMMENTS === */
+  .comment-section {
+    display: none;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .comment-section.open { display: block; animation: fadeIn 0.2s ease; }
+
+  .comment-input-wrap { display: flex; gap: 10px; margin-bottom: 16px; }
+  .comment-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.88rem;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    resize: none;
+  }
+  .comment-input::placeholder { color: var(--text-dim); }
+  .comment-input:focus { border-color: rgba(139,111,255,0.4); }
+
+  .comment-submit {
+    background: var(--violet);
+    border: none;
+    color: #fff;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.83rem;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: opacity 0.18s, transform 0.18s;
+    white-space: nowrap;
+    align-self: flex-end;
+  }
+  .comment-submit:hover { opacity: 0.85; transform: translateY(-1px); }
+
+  .comments-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .comment-item {
+    display: flex;
+    gap: 10px;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .comment-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.7rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .comment-body { flex: 1; }
+  .comment-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .comment-alias { font-family: 'Syne', sans-serif; font-size: 0.8rem; font-weight: 600; }
+  .comment-time { font-size: 0.72rem; color: var(--text-dim); }
+  .comment-text { font-size: 0.88rem; color: #b0b3c8; line-height: 1.5; }
+
+  .no-comments { font-size: 0.85rem; color: var(--text-dim); text-align: center; padding: 12px 0; }
+
+  /* === POST FORM === */
+  .post-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    box-shadow: var(--card-shadow);
+  }
+
+  .form-group { margin-bottom: 22px; }
+
+  .form-label {
+    display: block;
+    font-family: 'Syne', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+  }
+
+  .form-textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1rem;
+    line-height: 1.6;
+    padding: 14px 16px;
+    outline: none;
+    resize: vertical;
+    min-height: 160px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .form-textarea::placeholder { color: var(--text-dim); font-style: italic; }
+  .form-textarea:focus {
+    border-color: rgba(139,111,255,0.4);
+    box-shadow: 0 0 0 3px rgba(139,111,255,0.08);
+  }
+
+  .form-select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    padding: 12px 16px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a7d96' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    transition: border-color 0.2s;
+  }
+  .form-select:focus { border-color: rgba(139,111,255,0.4); }
+  .form-select option { background: #1a1e35; }
+
+  .char-count {
+    text-align: right;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-top: 6px;
+  }
+
+  .post-alias-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--amber-dim);
+    border: 1px solid rgba(245,166,35,0.25);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    margin-bottom: 24px;
+    font-size: 0.88rem;
+    color: #c8a95a;
+  }
+
+  .submit-btn {
+    width: 100%;
+    background: linear-gradient(135deg, var(--amber) 0%, #e8920a 100%);
+    border: none;
+    color: #0d0f18;
+    font-family: 'Syne', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    padding: 16px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.2s, box-shadow 0.2s;
+    letter-spacing: 0.3px;
+  }
+  .submit-btn:hover {
+    opacity: 0.92;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(245,166,35,0.3);
+  }
+  .submit-btn:active { transform: translateY(0); }
+
+  /* === SUCCESS TOAST === */
+  .toast {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #1e2640;
+    border: 1px solid var(--violet);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 14px 24px;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    z-index: 1000;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+    opacity: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+  /* === PROFILE === */
+  .profile-header {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    box-shadow: var(--card-shadow);
+  }
+
+  .profile-avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+    border: 3px solid rgba(245,166,35,0.4);
+  }
+
+  .profile-info h2 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1.3rem;
+    margin-bottom: 4px;
+  }
+
+  .profile-stats {
+    display: flex;
+    gap: 20px;
+    margin-top: 8px;
+  }
+
+  .stat { text-align: center; }
+  .stat-num { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.2rem; color: var(--amber); }
+  .stat-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; }
+
+  .section-heading {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-heading::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .friends-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .friend-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .friend-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+
+  .friend-name { font-family: 'Syne', sans-serif; font-size: 0.82rem; font-weight: 600; }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--text-dim);
+  }
+  .empty-icon { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
+  .empty-state p { font-size: 0.9rem; line-height: 1.6; }
+
+  /* === SCROLLBAR === */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+  /* === RESPONSIVE === */
+  @media (max-width: 600px) {
+    nav { padding: 0 16px; }
+    .nav-alias { display: none; }
+    .container { padding: 20px 14px; }
+    .card { padding: 18px; }
+    .post-form { padding: 22px; }
+    .profile-header { flex-direction: column; text-align: center; }
+    .profile-stats { justify-content: center; }
+    .friends-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* === DIVIDER === */
+  .selects-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 480px) { .selects-row { grid-template-columns: 1fr; } }
+
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo" onclick="showPage('feed')">ConfessIt</div>
+  <div class="nav-links">
+    <button class="nav-btn active" onclick="showPage('feed')" id="nav-feed">Feed</button>
+    <button class="nav-btn" onclick="showPage('post')" id="nav-post">+ Confess</button>
+    <button class="nav-btn" onclick="showPage('profile')" id="nav-profile">Profile</button>
+  </div>
+  <div class="nav-alias" id="nav-alias-display"></div>
+</nav>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <span id="toast-icon">✓</span>
+  <span id="toast-msg">Posted!</span>
+</div>
+
+<!-- ===================== FEED PAGE ===================== -->
+<div class="page active" id="page-feed">
+  <div class="container">
+    <div class="feed-controls">
+      <div class="search-wrap">
+        <svg class="search-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="search-input" placeholder="Search confessions…" oninput="renderFeed()" />
+      </div>
+
+      <div>
+        <div class="filter-label">Genre</div>
+        <div class="pill-bar genre" id="genre-pills"></div>
+      </div>
+
+      <div>
+        <div class="filter-label">Religion</div>
+        <div class="pill-bar religion" id="religion-pills"></div>
+      </div>
+    </div>
+
+    <div class="feed" id="feed-list"></div>
+  </div>
+</div>
+
+<!-- ===================== POST PAGE ===================== -->
+<div class="page" id="page-post">
+  <div class="container">
+    <h1 class="page-title">Share a Confession</h1>
+    <div class="post-form">
+      <div class="post-alias-info">
+        <span>🎭</span>
+        <span>Posting as <strong id="post-alias-name"></strong> — your identity is always anonymous</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Your Confession</label>
+        <textarea class="form-textarea" id="conf-text" placeholder="Let it out. No one will ever know it's you…" maxlength="1000" oninput="updateCharCount()"></textarea>
+        <div class="char-count"><span id="char-count">0</span> / 1000</div>
+      </div>
+
+      <div class="selects-row">
+        <div class="form-group">
+          <label class="form-label">Genre</label>
+          <select class="form-select" id="conf-genre">
+            <option value="Regret">Regret</option>
+            <option value="Love">Love</option>
+            <option value="Anger">Anger</option>
+            <option value="Secret">Secret</option>
+            <option value="Fear">Fear</option>
+            <option value="Pride">Pride</option>
+            <option value="Funny">Funny</option>
+            <option value="Spiritual">Spiritual</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Religion (optional)</label>
+          <select class="form-select" id="conf-religion">
+            <option value="Muslim">Muslim</option>
+            <option value="Christian">Christian</option>
+            <option value="Jewish">Jewish</option>
+            <option value="Hindu">Hindu</option>
+            <option value="Buddhist">Buddhist</option>
+            <option value="Atheist">Atheist</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="submit-btn" onclick="postConfession()">🕊 Confess Anonymously</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PROFILE PAGE ===================== -->
+<div class="page" id="page-profile">
+  <div class="container">
+    <div class="profile-header">
+      <div class="profile-avatar" id="profile-big-avatar"></div>
+      <div class="profile-info">
+        <h2 id="profile-alias-name"></h2>
+        <div style="color: var(--text-muted); font-size: 0.85rem;">Anonymous since always</div>
+        <div class="profile-stats">
+          <div class="stat">
+            <div class="stat-num" id="stat-confessions">0</div>
+            <div class="stat-label">Confessions</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="stat-friends">0</div>
+            <div class="stat-label">Friends</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="stat-likes">0</div>
+            <div class="stat-label">Likes Received</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-heading">Friends</div>
+    <div class="friends-grid" id="friends-grid"></div>
+
+    <div class="section-heading">My Confessions</div>
+    <div class="feed" id="my-feed-list"></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  DATA & CONSTANTS
+// ============================================================
+
+const ADJECTIVES = [
+  'Silent','Ghost','Hollow','Fading','Crimson','Velvet','Broken','Ashen',
+  'Neon','Shadow','Mystic','Burning','Frozen','Distant','Ancient','Silver',
+  'Dark','Wild','Pale','Lost','Rare','Quiet','Bright','Dusk','Sage','Storm'
+];
+const NOUNS = [
+  'Moth','Owl','Echo','Raven','Tide','Ember','Veil','Moon','Fox','Star',
+  'Specter','Flame','Phantom','Mist','Crow','Drift','Comet','Shore','Pine',
+  'Ridge','Hawk','Wren','Finch','Vale','Wisp','Lark','Fern','Bolt'
+];
+
+const GENRES   = ['Regret','Love','Anger','Secret','Fear','Pride','Funny','Spiritual'];
+const RELIGIONS = ['Muslim','Christian','Jewish','Hindu','Buddhist','Atheist','Other'];
+
+const PALETTE = [
+  ['#6c2bd9','#1e0a4a'],['#d9a12b','#4a3000'],['#2bd9a1','#004a35'],
+  ['#d92b6c','#4a0020'],['#2b8ed9','#00294a'],['#d9652b','#4a1800'],
+  ['#8ed92b','#1e4a00'],['#d92bd9','#4a004a'],['#2bd9d9','#004a4a'],
+  ['#d9d92b','#4a4a00'],['#9b2bd9','#2a004a'],['#2bd96c','#004a1e'],
+];
+
+function getAvatarStyle(alias) {
+  let hash = 0;
+  for (let c of alias) hash = (hash * 31 + c.charCodeAt(0)) & 0xffffffff;
+  const [fg, bg] = PALETTE[Math.abs(hash) % PALETTE.length];
+  return { fg, bg };
+}
+
+function generateAlias() {
+  const adj  = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  const num  = Math.floor(Math.random() * 90) + 10;
+  return `${adj}${noun}${num}`;
+}
+
+function timeAgo(ts) {
+  const diff = (Date.now() - ts) / 1000;
+  if (diff < 60)   return 'just now';
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  return `${Math.floor(diff/86400)}d ago`;
+}
+
+// ============================================================
+//  STORAGE
+// ============================================================
+
+function load(key, def) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
+  catch { return def; }
+}
+function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+
+// ============================================================
+//  INIT
+// ============================================================
+
+let myAlias = load('confessit_alias', null);
+if (!myAlias) {
+  myAlias = generateAlias();
+  save('confessit_alias', myAlias);
+}
+
+let confessions = load('confessit_confessions', null);
+if (!confessions) {
+  const now = Date.now();
+  confessions = [
+    {
+      id: 'seed1',
+      alias: 'SilentOwl47',
+      text: "I've been pretending to be happy at work for three years. Every morning I smile, crack jokes, and ask everyone how their weekends went. But inside I feel completely hollow, like I'm watching myself from outside my own body. I don't know when it started or how to stop.",
+      genre: 'Regret',
+      religion: 'Atheist',
+      ts: now - 1000 * 3600 * 2,
+      likes: 38,
+      likedBy: [],
+      comments: [
+        { alias: 'CrimsonFern21', text: "I felt this so deeply. You're not alone.", ts: now - 1000 * 3600 * 1.5 },
+        { alias: 'GhostRidge55', text: "Masking is exhausting. I hope you find rest soon.", ts: now - 1000 * 3600 * 1 }
+      ]
+    },
+    {
+      id: 'seed2',
+      alias: 'BurningTide88',
+      text: "I fell in love with my best friend's partner. Nothing happened, nothing ever will. But every time I see them together I have to remind myself to breathe. I've been carrying this secret for two years and it's slowly eating me alive.",
+      genre: 'Love',
+      religion: 'Christian',
+      ts: now - 1000 * 3600 * 5,
+      likes: 72,
+      likedBy: [],
+      comments: [
+        { alias: 'VelvetMist33', text: "Love that can't be spoken is the heaviest kind.", ts: now - 1000 * 3600 * 4 }
+      ]
+    },
+    {
+      id: 'seed3',
+      alias: 'DuskWisp19',
+      text: "I sometimes skip my prayers and then lie to my family about it. They'd be devastated if they knew. Faith has always felt like something I was handed, not something I chose. I'm not sure I believe anymore, and that terrifies me more than anything else.",
+      genre: 'Spiritual',
+      religion: 'Muslim',
+      ts: now - 1000 * 3600 * 9,
+      likes: 55,
+      likedBy: [],
+      comments: [
+        { alias: 'FadingHawk64', text: "Doubt isn't the opposite of faith. It's part of it.", ts: now - 1000 * 3600 * 8 },
+        { alias: 'NeonBolt77', text: "I went through the same thing at 22. It gets clearer with time.", ts: now - 1000 * 3600 * 7.5 }
+      ]
+    },
+    {
+      id: 'seed4',
+      alias: 'MysticComet13',
+      text: "I got a promotion six months ago that I'm 100% not qualified for. I got it because my manager likes me, not my work. Every single day I feel like a fraud waiting to be exposed. I've started having anxiety dreams about it.",
+      genre: 'Fear',
+      religion: 'Hindu',
+      ts: now - 1000 * 3600 * 14,
+      likes: 91,
+      likedBy: [],
+      comments: []
+    },
+    {
+      id: 'seed5',
+      alias: 'HollowStar66',
+      text: "My grandfather passed away last year and left me a small inheritance. I haven't told anyone. I've been using it to fund a secret ceramics studio in my garage. I go in there every evening after my family thinks I'm 'working late'. It's the only time I feel like myself.",
+      genre: 'Secret',
+      religion: 'Jewish',
+      ts: now - 1000 * 3600 * 22,
+      likes: 107,
+      likedBy: [],
+      comments: [
+        { alias: 'AncientShore42', text: "This is actually kind of beautiful.", ts: now - 1000 * 3600 * 20 }
+      ]
+    },
+    {
+      id: 'seed6',
+      alias: 'WildLark31',
+      text: "I accidentally locked myself out of my house in nothing but a bathrobe and had to convince my extremely uptight neighbor to let me use their phone. She opened the door and just stared at me for a full ten seconds. Then she said 'not again' and handed me a phone. It was not my first time.",
+      genre: 'Funny',
+      religion: 'Buddhist',
+      ts: now - 1000 * 86400 * 1.5,
+      likes: 143,
+      likedBy: [],
+      comments: [
+        { alias: 'PaleDrift88', text: "'Not again' is SENDING me 💀", ts: now - 1000 * 86400 * 1 }
+      ]
+    }
+  ];
+  save('confessit_confessions', confessions);
+}
+
+let friends = load('confessit_friends', []);
+
+// ============================================================
+//  GENRE / RELIGION FILTER STATE
+// ============================================================
+
+let activeGenre = 'All';
+let activeReligion = 'All';
+
+function buildPills() {
+  const gBar = document.getElementById('genre-pills');
+  const rBar = document.getElementById('religion-pills');
+
+  const allGenres   = ['All', ...GENRES];
+  const allReligions = ['All', ...RELIGIONS];
+
+  gBar.innerHTML = allGenres.map(g => `
+    <button class="pill ${g === activeGenre ? 'active' : ''}" onclick="setGenre('${g}')">${g}</button>
+  `).join('');
+
+  rBar.innerHTML = allReligions.map(r => `
+    <button class="pill ${r === activeReligion ? 'active' : ''}" onclick="setReligion('${r}')">${r}</button>
+  `).join('');
+}
+
+function setGenre(g) { activeGenre = g; buildPills(); renderFeed(); }
+function setReligion(r) { activeReligion = r; buildPills(); renderFeed(); }
+
+// ============================================================
+//  RENDER HELPERS
+// ============================================================
+
+function avatarHTML(alias, size=36, fontSize='0.85rem') {
+  const s = getAvatarStyle(alias);
+  const letter = alias.charAt(0).toUpperCase();
+  return `<div class="alias-avatar" style="width:${size}px;height:${size}px;font-size:${fontSize};background:${s.bg};color:${s.fg};">${letter}</div>`;
+}
+
+function commentAvatarHTML(alias) {
+  const s = getAvatarStyle(alias);
+  return `<div class="comment-avatar" style="background:${s.bg};color:${s.fg};">${alias.charAt(0)}</div>`;
+}
+
+function renderCard(c, delay = 0) {
+  const isOwn = c.alias === myAlias;
+  const isFriend = friends.includes(c.alias);
+  const likedByMe = c.likedBy.includes(myAlias);
+  const s = getAvatarStyle(c.alias);
+  const truncated = c.text.length > 300;
+
+  const commentsHTML = (c.comments || []).map(cm => `
+    <div class="comment-item">
+      ${commentAvatarHTML(cm.alias)}
+      <div class="comment-body">
+        <div class="comment-meta">
+          <span class="comment-alias" style="color:${getAvatarStyle(cm.alias).fg}">${cm.alias}</span>
+          <span class="comment-time">${timeAgo(cm.ts)}</span>
+        </div>
+        <div class="comment-text">${escHtml(cm.text)}</div>
+      </div>
+    </div>
+  `).join('');
+
+  return `
+    <div class="card" id="card-${c.id}" style="animation-delay:${delay}ms">
+      <div class="card-header">
+        ${avatarHTML(c.alias)}
+        <span class="alias-name" style="color:${s.fg}">${c.alias}</span>
+        ${isOwn ? '<span class="own-badge">You</span>' : ''}
+        <button class="add-friend-btn ${isFriend ? 'is-friend' : ''} ${isOwn ? 'own-user' : ''}"
+          id="fb-${c.id}" onclick="toggleFriend('${c.alias}', '${c.id}')">
+          ${isFriend ? '✓ Friends' : '+ Add'}
+        </button>
+        <span class="card-timestamp">${timeAgo(c.ts)}</span>
+      </div>
+
+      <div class="card-tags">
+        <span class="genre-tag">${c.genre}</span>
+        <span class="religion-pill rel-${c.religion}">${c.religion}</span>
+      </div>
+
+      <div class="card-text" id="ct-${c.id}">
+        <div class="trunc">${escHtml(c.text)}</div>
+      </div>
+      ${truncated ? `<button class="read-more-btn" id="rmb-${c.id}" onclick="toggleReadMore('${c.id}')">Read more →</button>` : ''}
+
+      <div class="card-actions">
+        <button class="action-btn like-btn ${likedByMe ? 'liked' : ''}" onclick="toggleLike('${c.id}')">
+          <svg width="15" height="15" fill="${likedByMe ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          <span id="lc-${c.id}">${c.likes}</span>
+        </button>
+        <button class="action-btn comment-btn" id="cmb-${c.id}" onclick="toggleComments('${c.id}')">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          ${c.comments.length} Comment${c.comments.length !== 1 ? 's' : ''}
+        </button>
+      </div>
+
+      <div class="comment-section" id="cs-${c.id}">
+        <div class="comment-input-wrap">
+          <textarea class="comment-input" id="ci-${c.id}" placeholder="Add a comment…" rows="1"></textarea>
+          <button class="comment-submit" onclick="postComment('${c.id}')">Post</button>
+        </div>
+        <div class="comments-list" id="cl-${c.id}">
+          ${commentsHTML || '<div class="no-comments">No comments yet. Be the first.</div>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ============================================================
+//  RENDER FEED
+// ============================================================
+
+function renderFeed() {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  const list = document.getElementById('feed-list');
+
+  let items = [...confessions].sort((a,b) => b.ts - a.ts);
+
+  if (activeGenre !== 'All') items = items.filter(c => c.genre === activeGenre);
+  if (activeReligion !== 'All') items = items.filter(c => c.religion === activeReligion);
+  if (q) items = items.filter(c => c.text.toLowerCase().includes(q) || c.alias.toLowerCase().includes(q));
+
+  if (items.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>No confessions match your filters.<br>Try adjusting your search.</p></div>`;
+    return;
+  }
+
+  list.innerHTML = items.map((c, i) => renderCard(c, i * 40)).join('');
+}
+
+// ============================================================
+//  INTERACTIONS
+// ============================================================
+
+function toggleLike(id) {
+  const c = confessions.find(x => x.id === id);
+  if (!c) return;
+  const idx = c.likedBy.indexOf(myAlias);
+  if (idx === -1) { c.likedBy.push(myAlias); c.likes++; }
+  else            { c.likedBy.splice(idx, 1); c.likes--; }
+  save('confessit_confessions', confessions);
+
+  const btn = document.querySelector(`#card-${id} .like-btn`);
+  const icon = btn?.querySelector('svg');
+  const count = document.getElementById(`lc-${id}`);
+  if (btn)  { btn.classList.toggle('liked', c.likedBy.includes(myAlias)); }
+  if (icon) { icon.setAttribute('fill', c.likedBy.includes(myAlias) ? 'currentColor' : 'none'); }
+  if (count) count.textContent = c.likes;
+}
+
+function toggleComments(id) {
+  const section = document.getElementById(`cs-${id}`);
+  const btn     = document.getElementById(`cmb-${id}`);
+  section.classList.toggle('open');
+  btn.classList.toggle('active', section.classList.contains('open'));
+}
+
+function postComment(id) {
+  const input = document.getElementById(`ci-${id}`);
+  const text  = input.value.trim();
+  if (!text) return;
+  const c = confessions.find(x => x.id === id);
+  if (!c) return;
+  const comment = { alias: myAlias, text, ts: Date.now() };
+  c.comments.push(comment);
+  save('confessit_confessions', confessions);
+
+  const list = document.getElementById(`cl-${id}`);
+  const noComments = list.querySelector('.no-comments');
+  if (noComments) noComments.remove();
+  const el = document.createElement('div');
+  el.innerHTML = `
+    <div class="comment-item">
+      ${commentAvatarHTML(myAlias)}
+      <div class="comment-body">
+        <div class="comment-meta">
+          <span class="comment-alias" style="color:${getAvatarStyle(myAlias).fg}">${myAlias}</span>
+          <span class="comment-time">just now</span>
+        </div>
+        <div class="comment-text">${escHtml(text)}</div>
+      </div>
+    </div>
+  `;
+  list.appendChild(el.firstElementChild);
+
+  // Update comment count
+  const btn = document.getElementById(`cmb-${id}`);
+  const newCount = c.comments.length;
+  btn.innerHTML = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> ${newCount} Comment${newCount !== 1 ? 's' : ''}`;
+  input.value = '';
+  showToast('💬 Comment posted!');
+}
+
+function toggleReadMore(id) {
+  const ct  = document.getElementById(`ct-${id}`);
+  const btn = document.getElementById(`rmb-${id}`);
+  ct.classList.toggle('expanded');
+  btn.textContent = ct.classList.contains('expanded') ? '← Show less' : 'Read more →';
+}
+
+function toggleFriend(alias, cardId) {
+  const idx = friends.indexOf(alias);
+  const btn = document.getElementById(`fb-${cardId}`);
+  if (idx === -1) {
+    friends.push(alias);
+    showToast(`🤝 ${alias} added to friends!`);
+    if (btn) { btn.textContent = '✓ Friends'; btn.classList.add('is-friend'); }
+  } else {
+    friends.splice(idx, 1);
+    showToast(`Removed ${alias} from friends`);
+    if (btn) { btn.textContent = '+ Add'; btn.classList.remove('is-friend'); }
+  }
+  save('confessit_friends', friends);
+}
+
+// ============================================================
+//  POST CONFESSION
+// ============================================================
+
+function updateCharCount() {
+  const v = document.getElementById('conf-text').value.length;
+  document.getElementById('char-count').textContent = v;
+}
+
+function postConfession() {
+  const text    = document.getElementById('conf-text').value.trim();
+  const genre   = document.getElementById('conf-genre').value;
+  const religion = document.getElementById('conf-religion').value;
+
+  if (!text) { showToast('✏️ Please write something first', true); return; }
+  if (text.length < 10) { showToast('✏️ Confession too short!', true); return; }
+
+  const c = {
+    id: 'c' + Date.now(),
+    alias: myAlias,
+    text,
+    genre,
+    religion,
+    ts: Date.now(),
+    likes: 0,
+    likedBy: [],
+    comments: []
+  };
+
+  confessions.unshift(c);
+  save('confessit_confessions', confessions);
+
+  document.getElementById('conf-text').value = '';
+  updateCharCount();
+
+  showToast('🕊 Confession posted!');
+  showPage('feed');
+  renderFeed();
+}
+
+// ============================================================
+//  PROFILE
+// ============================================================
+
+function renderProfile() {
+  const s = getAvatarStyle(myAlias);
+  const avatar = document.getElementById('profile-big-avatar');
+  avatar.textContent = myAlias.charAt(0);
+  avatar.style.background = s.bg;
+  avatar.style.color = s.fg;
+
+  document.getElementById('profile-alias-name').textContent = myAlias;
+
+  const myConf = confessions.filter(c => c.alias === myAlias);
+  const totalLikes = myConf.reduce((a, c) => a + c.likes, 0);
+
+  document.getElementById('stat-confessions').textContent = myConf.length;
+  document.getElementById('stat-friends').textContent     = friends.length;
+  document.getElementById('stat-likes').textContent       = totalLikes;
+
+  // Friends grid
+  const fg = document.getElementById('friends-grid');
+  if (friends.length === 0) {
+    fg.innerHTML = `<div style="grid-column:1/-1;" class="empty-state"><div class="empty-icon">👥</div><p>No friends yet.<br>Add friends from confession cards.</p></div>`;
+  } else {
+    fg.innerHTML = friends.map(f => {
+      const fs = getAvatarStyle(f);
+      return `
+        <div class="friend-card">
+          <div class="friend-avatar" style="background:${fs.bg};color:${fs.fg};">${f.charAt(0)}</div>
+          <span class="friend-name" style="color:${fs.fg}">${f}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // My confessions
+  const mfl = document.getElementById('my-feed-list');
+  if (myConf.length === 0) {
+    mfl.innerHTML = `<div class="empty-state"><div class="empty-icon">📝</div><p>No confessions yet.<br>Go ahead — let it out.</p></div>`;
+  } else {
+    mfl.innerHTML = myConf.sort((a,b) => b.ts - a.ts).map((c, i) => renderCard(c, i * 40)).join('');
+  }
+}
+
+// ============================================================
+//  PAGE NAV
+// ============================================================
+
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+
+  document.getElementById(`page-${page}`).classList.add('active');
+  document.getElementById(`nav-${page}`)?.classList.add('active');
+
+  if (page === 'feed')    { buildPills(); renderFeed(); }
+  if (page === 'post')    { document.getElementById('post-alias-name').textContent = myAlias; }
+  if (page === 'profile') renderProfile();
+}
+
+// ============================================================
+//  TOAST
+// ============================================================
+
+let toastTimer;
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  const m = document.getElementById('toast-msg');
+  m.textContent = msg;
+  t.style.borderColor = isError ? '#f87171' : 'var(--violet)';
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ============================================================
+//  BOOT
+// ============================================================
+
+document.getElementById('nav-alias-display').textContent = myAlias;
+document.getElementById('post-alias-name').textContent = myAlias;
+showPage('feed');
+
+</script>
+</body>
+</html>
